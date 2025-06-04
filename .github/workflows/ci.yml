@@ -4,12 +4,14 @@ name: CI / CD
 on:
   pull_request:
   push:
-    branches: [main]
-    tags: ["v*.*.*"]
+    branches: [main]        # CI em pushes para main
+    tags: ["v*.*.*"]        # CD quando tagar vX.Y.Z
   workflow_dispatch:
 
 jobs:
-# --------------------------- LINT + TEST ---------------------------
+# ------------------------------------------------------------------ #
+# 1) LINT + TYPE-CHECK + TEST                                         #
+# ------------------------------------------------------------------ #
   quality:
     runs-on: ubuntu-latest
     permissions: read-all
@@ -19,16 +21,16 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
 
-      - name: Install deps (dev extra)
+      - name: Install dev deps
         run: |
           python -m pip install -U pip
           python -m pip install ".[dev]"
 
-      # - name: Ruff – style / lint
-      #   run: ruff check .
+      - name: Ruff – style / lint
+        run: ruff check .
 
-      # - name: mypy – static typing
-      #   run: mypy pix_client
+      - name: mypy – static typing
+        run: mypy pix_client
 
       - name: Pytest + coverage
         run: pytest --cov=pix_client --cov-report=xml
@@ -39,7 +41,9 @@ jobs:
           name: coverage-xml
           path: coverage.xml
 
-# --------------------------- BUILD DIST ---------------------------
+# ------------------------------------------------------------------ #
+# 2) BUILD DIST                                                       #
+# ------------------------------------------------------------------ #
   build:
     needs: quality
     runs-on: ubuntu-latest
@@ -61,7 +65,9 @@ jobs:
           name: dist
           path: dist/*
 
-# --------------------------- PUBLISH – TestPyPI ---------------------------
+# ------------------------------------------------------------------ #
+# 3) PUBLISH – TEST PYPI                                              #
+# ------------------------------------------------------------------ #
   release-testpypi:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
@@ -69,7 +75,9 @@ jobs:
     permissions: read-all
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: dist }
+        with:
+          name: dist
+          path: dist          # ← extrai diretamente para ./dist
 
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
@@ -82,38 +90,45 @@ jobs:
           python -m pip install -U pip twine
           twine upload --repository testpypi dist/*
 
-# --------------------------- PUBLISH – PyPI ---------------------------
+# ------------------------------------------------------------------ #
+# 4) PUBLISH – PYPI                                                   #
+# ------------------------------------------------------------------ #
   release-pypi:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: release-testpypi
     runs-on: ubuntu-latest
-    environment: production
+    environment: production        # opcional: pede aprovação manual
     permissions: read-all
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: dist }
+        with:
+          name: dist
+          path: dist              # ← idem
 
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
 
-      # - name: Upload to PyPI
-      #   env:
-      #     TWINE_USERNAME: "__token__"
-      #     TWINE_PASSWORD:
-      #   run: |
-      #     python -m pip install -U pip twine
-      #     twine upload dist/*
+      - name: Upload to PyPI
+        env:
+          TWINE_USERNAME: "__token__"
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m pip install -U pip twine
+          twine upload dist/*
 
-# --------------------------- GITHUB RELEASE ---------------------------
+# ------------------------------------------------------------------ #
+# 5) GITHUB RELEASE                                                   #
+# ------------------------------------------------------------------ #
   github-release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: write            # necessário para criar release
+    permissions: { contents: write }
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: dist }
+        with:
+          name: dist
+          path: dist
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
