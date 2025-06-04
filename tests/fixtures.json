@@ -1,0 +1,9 @@
+{
+  "valid_key": "abc123",
+  "transfer": {
+    "source_account": "123-4",
+    "destination_key": "abc123",
+    "amount": 1000,
+    "idempotency_key": "00000000-0000-0000-0000-000000000000"
+  }
+}
