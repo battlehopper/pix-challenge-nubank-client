@@ -13,8 +13,8 @@ app = typer.Typer(help="Cliente Pix (desafio)")
 client = PixClient()
 
 
-@app.command()                      # type: ignore[misc]
-def search(key: str) -> None:       # ← add retorno
+@app.command()
+def search(key: str) -> None:
     """Consulta uma chave Pix."""
     try:
         info = client.search_key(key)
@@ -24,7 +24,7 @@ def search(key: str) -> None:       # ← add retorno
         sys.exit(1)
 
 
-@app.command()                      # type: ignore[misc]
+@app.command()
 def transfer(sender: str, recipient: str, value: float) -> None:
     """Efetua uma transferência entre duas chaves Pix."""
     try:
