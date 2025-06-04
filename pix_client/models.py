@@ -1,25 +1,22 @@
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Literal
-
 
 @dataclass(slots=True)
 class KeyInfo:
-    key: str
-    account_name: str
+    name: str
     bank: str
 
 
 @dataclass(slots=True)
 class TransferRequest:
-    source_account: str
-    destination_key: str
-    amount: int
-    idempotency_key: str
+    sender: str
+    recipient: str
+    value: float
 
 
 @dataclass(slots=True)
 class TransferResult:
-    status: Literal["SUCCESS", "FAILURE"]
-    created_at: datetime
-    tx_id: str
+    recipient: str
+    sender: str
+    transaction_id: str
+    value: float
+    

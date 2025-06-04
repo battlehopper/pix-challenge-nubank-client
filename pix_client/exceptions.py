@@ -1,5 +1,5 @@
 class PixError(Exception):
-    """Base de erros do cliente Pix."""
+    """Exceção base do cliente Pix."""
 
 
 class PixKeyNotFound(PixError):
@@ -8,4 +8,5 @@ class PixKeyNotFound(PixError):
 
 
 class PixTransferError(PixError):
-    pass
+    """Falha na operação de transferência."""
+

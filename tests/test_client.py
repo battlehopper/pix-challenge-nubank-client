@@ -1,58 +1,162 @@
 # tests/test_client.py
-import uuid
-import httpx
 import pytest
-from httpx import Response, Request
+import httpx
+import json
 from pix_client.client import PixClient
-from pix_client.models import TransferRequest
-from pix_client.exceptions import PixTransferError
-from pix_client.exceptions import PixKeyNotFound
+from pix_client.config import Settings
+from pix_client.models import KeyInfo, TransferRequest, TransferResult
+from pix_client.exceptions import PixKeyNotFound, PixTransferError
 
 
-def _fake_send(self, request: Request, **kwargs):
-    """Substitui Client.send; devolve Response com o próprio `request` embutido."""
-    if request.method == "GET":
-        return Response(
-            200,
-            request=request,
-            json={"key": "abc", "account_name": "Ana", "bank": "Nubank"},
+# -------- utilidade comum --------
+def make_client(transport: httpx.MockTransport) -> PixClient:
+    """
+    Cria um PixClient que usa o MockTransport em vez de abrir conexões reais.
+    """
+    settings = Settings(bcb_base_url="http://mock", timeout=5.0)
+    client = PixClient(settings)
+    client._http = httpx.Client(base_url=settings.bcb_base_url, transport=transport)
+    return client
+
+
+def seq_transport(responses):
+    """
+    Devolve um MockTransport que consome, em ordem, uma lista de
+    dicionários com as chaves: method, path, status_code, json|text.
+    Serializa o conteúdo JSON antes de devolver.
+    """
+    def handler(request: httpx.Request):
+        assert responses, "foram feitas mais requisições que respostas definidas"
+        expected = responses.pop(0)
+
+        # valida método e rota
+        assert request.method == expected["method"]
+        assert request.url.path == expected["path"]
+
+        # prepara corpo/hdrs
+        if "json" in expected:
+            content = json.dumps(expected["json"]).encode()
+            headers = {"Content-Type": "application/json"}
+        else:
+            content = expected.get("text", "").encode()
+            headers = {"Content-Type": "text/plain"}
+
+        return httpx.Response(
+            status_code=expected["status_code"],
+            content=content,
+            headers=headers,
         )
-    return Response(
-        201,
-        request=request,
-        json={
-            "status": "SUCCESS",
-            "created_at": "2025-06-01T00:00:00",
-            "tx_id": "XYZ",
-        },
+
+    return httpx.MockTransport(handler)
+# -------- search_key --------
+def test_search_key_success():
+    key_payload = {"name": "Ausnia", "bank": "Nubank"}
+    transport = seq_transport(
+        [
+            {
+                "method": "GET",
+                "path": "/search",
+                "status_code": 200,
+                "json": key_payload,
+            }
+        ]
     )
 
+    client = make_client(transport)
+    info = client.search_key("772384558")
 
-def test_happy_path(monkeypatch):
-    monkeypatch.setattr(httpx.Client, "send", _fake_send)
-    client = PixClient()
-    client.search_key("abc")
-    out = client.transfer(
-        TransferRequest("123", "abc", 1000, str(uuid.uuid4()))
+    assert info == KeyInfo(**key_payload)
+
+
+def test_search_key_not_found():
+    transport = seq_transport(
+        [
+            {
+                "method": "GET",
+                "path": "/search",
+                "status_code": 404,
+            }
+        ]
     )
-    assert out.status == "SUCCESS"
+    client = make_client(transport)
 
-def _fake_404(self, request: Request, **kw):
-    return Response(404, request=request)
-
-def test_key_not_found(monkeypatch):
-    monkeypatch.setattr(httpx.Client, "send", _fake_404)
-    client = PixClient()
     with pytest.raises(PixKeyNotFound):
-        client.search_key("xyz")
+        client.search_key("000000000")
 
-def _fake_500(self, request: Request, **kw):
-    return Response(500, request=request, text="boom")
 
-def test_transfer_failure(monkeypatch):
-    monkeypatch.setattr(httpx.Client, "send", _fake_500)
-    client = PixClient()
+# -------- transfer --------
+def test_transfer_success():
+    transfer_payload = {
+        "recipient": "176086599",
+        "sender": "772384558",
+        "transaction_id": "abcdef123",
+        "value": 1.0,
+    }
+
+    transport = seq_transport(
+        [
+            # 1) valida a chave do destinatário
+            {
+                "method": "GET",
+                "path": "/search",
+                "status_code": 200,
+                "json": {"name": "Dundîr", "bank": "Bradesco"},
+            },
+            # 2) realiza a transferência
+            {
+                "method": "POST",
+                "path": "/transfer",
+                "status_code": 200,
+                "json": transfer_payload,
+            },
+        ]
+    )
+
+    client = make_client(transport)
+    req = TransferRequest(sender="772384558", recipient="176086599", value=1)
+    result = client.transfer(req)
+
+    assert result == TransferResult(**transfer_payload)
+
+
+def test_transfer_recipient_not_found():
+    transport = seq_transport(
+        [
+            {
+                "method": "GET",
+                "path": "/search",
+                "status_code": 404,
+            }
+        ]
+    )
+    client = make_client(transport)
+    req = TransferRequest(sender="772384558", recipient="999999999", value=10)
+
+    with pytest.raises(PixKeyNotFound):
+        client.transfer(req)
+
+
+def test_transfer_server_error():
+    transport = seq_transport(
+        [
+            # Chave válida
+            {
+                "method": "GET",
+                "path": "/search",
+                "status_code": 200,
+                "json": {"name": "Ausnia", "bank": "Nubank"},
+            },
+            # Erro ao transferir
+            {
+                "method": "POST",
+                "path": "/transfer",
+                "status_code": 500,
+                "text": "erro interno",
+            },
+        ]
+    )
+    client = make_client(transport)
+    req = TransferRequest(sender="772384558", recipient="176086599", value=5)
+
     with pytest.raises(PixTransferError):
-        client.transfer(
-            TransferRequest("123", "abc", 1000, "idemp")
-        )
+        client.transfer(req)
