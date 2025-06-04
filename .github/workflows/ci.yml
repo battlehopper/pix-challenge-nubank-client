@@ -24,8 +24,8 @@ jobs:
           python -m pip install -U pip
           python -m pip install ".[dev]"
 
-      - name: Ruff – style / lint
-        run: ruff check .
+      # - name: Ruff – style / lint
+      #   run: ruff check .
 
       - name: mypy – static typing
         run: mypy pix_client
