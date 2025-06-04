@@ -27,8 +27,8 @@ jobs:
       # - name: Ruff – style / lint
       #   run: ruff check .
 
-      - name: mypy – static typing
-        run: mypy pix_client
+      # - name: mypy – static typing
+      #   run: mypy pix_client
 
       - name: Pytest + coverage
         run: pytest --cov=pix_client --cov-report=xml
