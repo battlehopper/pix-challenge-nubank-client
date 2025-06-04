@@ -4,17 +4,17 @@ from __future__ import annotations
 import sys
 import typer
 from rich import print as rprint
-from pix_client.client import PixClient
-from pix_client.models import TransferRequest
-from pix_client.exceptions import PixError
 
+from pix_client.client import PixClient
+from pix_client.exceptions import PixError
+from pix_client.models import TransferRequest
 
 app = typer.Typer(help="Cliente Pix (desafio)")
 client = PixClient()
 
 
-@app.command()                      # type: ignore[misc]
-def search(key: str) -> None:       # ← add retorno
+@app.command()
+def search(key: str) -> None:
     """Consulta uma chave Pix."""
     try:
         info = client.search_key(key)
@@ -24,7 +24,7 @@ def search(key: str) -> None:       # ← add retorno
         sys.exit(1)
 
 
-@app.command()                      # type: ignore[misc]
+@app.command()
 def transfer(sender: str, recipient: str, value: float) -> None:
     """Efetua uma transferência entre duas chaves Pix."""
     try:
@@ -37,3 +37,13 @@ def transfer(sender: str, recipient: str, value: float) -> None:
     except PixError as exc:
         rprint(f"[red]{exc}")
         sys.exit(1)
+
+
+def main() -> None: 
+    import typer
+
+    typer.run(app)
+
+
+if __name__ == "__main__":
+    main()
