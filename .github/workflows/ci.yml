@@ -4,8 +4,8 @@ name: CI / CD
 on:
   pull_request:
   push:
-    branches: [main]
-    tags: ["v*.*.*"]
+    branches: [main]        # roda CI em pushes na main
+    tags: ["v*.*.*"]        # roda CD quando criar tag vX.Y.Z
   workflow_dispatch:
 
 jobs:
@@ -24,11 +24,11 @@ jobs:
           python -m pip install -U pip
           python -m pip install ".[dev]"
 
-      # - name: Ruff – style / lint
-      #   run: ruff check .
+      - name: Ruff – style / lint
+        run: ruff check .
 
-      # - name: mypy – static typing
-      #   run: mypy pix_client
+      - name: mypy – static typing
+        run: mypy pix_client
 
       - name: Pytest + coverage
         run: pytest --cov=pix_client --cov-report=xml
@@ -69,7 +69,9 @@ jobs:
     permissions: read-all
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: dist }
+        with:
+          name: dist
+          path: dist          # ← extrai para ./dist
 
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
@@ -87,22 +89,24 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: release-testpypi
     runs-on: ubuntu-latest
-    environment: production
+    environment: production   # opcional: exija aprovação manual
     permissions: read-all
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: dist }
+        with:
+          name: dist
+          path: dist
 
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
 
-      # - name: Upload to PyPI
-      #   env:
-      #     TWINE_USERNAME: "__token__"
-      #     TWINE_PASSWORD:
-      #   run: |
-      #     python -m pip install -U pip twine
-      #     twine upload dist/*
+      - name: Upload to PyPI
+        env:
+          TWINE_USERNAME: "__token__"
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m pip install -U pip twine
+          twine upload dist/*
 
 # --------------------------- GITHUB RELEASE ---------------------------
   github-release:
@@ -110,10 +114,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write            # necessário para criar release
+      contents: write        # necessário para criar release
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: dist }
+        with:
+          name: dist
+          path: dist
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
